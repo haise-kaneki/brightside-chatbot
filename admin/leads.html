@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leads — Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root{
+    --ink:#101E1B; --paper:#F6F7F2; --paper-raised:#FFFFFF;
+    --teal:#123B3E; --teal-tint:#E7EEEA; --slate:#5B665F; --line:#DEE1D6;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--paper); color:var(--ink); font-family:-apple-system,'Segoe UI',Arial,sans-serif; padding:32px 24px 64px; }
+  .wrap{ max-width:960px; margin:0 auto; }
+  h1{ font-size:22px; margin:0 0 4px; }
+  .sub{ color:var(--slate); font-size:14px; margin-bottom:24px; }
+  .toolbar{ display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+  button{ font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; background:var(--teal); color:#fff; border:none; border-radius:8px; padding:9px 16px; }
+  button:hover{ opacity:.9; }
+  .count{ font-size:13.5px; color:var(--slate); }
+  table{ width:100%; border-collapse:collapse; background:var(--paper-raised); border-radius:10px; overflow:hidden; box-shadow:0 1px 0 var(--line); }
+  th, td{ text-align:left; padding:12px 14px; font-size:13.5px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th{ background:var(--teal-tint); color:var(--teal); font-weight:700; font-size:12.5px; text-transform:uppercase; letter-spacing:.02em; }
+  tr:last-child td{ border-bottom:none; }
+  td.issue{ max-width:340px; white-space:pre-wrap; }
+  .empty, .error{ padding:40px 16px; text-align:center; color:var(--slate); }
+  .error{ color:#963333; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="page-title">Leads</h1>
+  <p class="sub">Requests submitted through the website chat assistant.</p>
+  <div class="toolbar">
+    <button id="refresh-btn" type="button">Refresh</button>
+    <span class="count" id="count-label"></span>
+  </div>
+  <div id="content">Loading…</div>
+</div>
+
+<script>
+  const contentEl = document.getElementById('content');
+  const countEl = document.getElementById('count-label');
+  const refreshBtn = document.getElementById('refresh-btn');
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+  }
+  function formatDate(iso) {
+    try { return new Date(iso).toLocaleString(); } catch { return iso || ''; }
+  }
+
+  async function loadLeads() {
+    contentEl.textContent = 'Loading…';
+    countEl.textContent = '';
+    try {
+      const res = await fetch('/api/leads');
+      if (!res.ok) {
+        contentEl.innerHTML = '<div class="error">Could not load leads (status ' + res.status + ').</div>';
+        return;
+      }
+      const data = await res.json();
+      const leads = Array.isArray(data.leads) ? data.leads : [];
+      countEl.textContent = leads.length + (leads.length === 1 ? ' lead' : ' leads');
+
+      if (leads.length === 0) {
+        contentEl.innerHTML = '<div class="empty">No leads yet. New requests from the chat widget will show up here.</div>';
+        return;
+      }
+
+      const rows = leads.map(function (lead) {
+        return '<tr>' +
+          '<td>' + escapeHtml(formatDate(lead.createdAt)) + '</td>' +
+          '<td>' + escapeHtml(lead.name) + '</td>' +
+          '<td>' + (lead.phone ? '<a href="tel:' + escapeHtml(lead.phone) + '">' + escapeHtml(lead.phone) + '</a>' : '&mdash;') + '</td>' +
+          '<td>' + (lead.email ? '<a href="mailto:' + escapeHtml(lead.email) + '">' + escapeHtml(lead.email) + '</a>' : '&mdash;') + '</td>' +
+          '<td class="issue">' + escapeHtml(lead.issue) + '</td>' +
+          '</tr>';
+      }).join('');
+
+      contentEl.innerHTML =
+        '<table><thead><tr><th>Received</th><th>Name</th><th>Phone</th><th>Email</th><th>Issue</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    } catch (err) {
+      contentEl.innerHTML = '<div class="error">Could not reach the server. Check your connection and try again.</div>';
+    }
+  }
+
+  refreshBtn.addEventListener('click', loadLeads);
+  loadLeads();
+
+  fetch('/api/widget-config')
+    .then(function (res) { return res.ok ? res.json() : null; })
+    .then(function (data) {
+      if (data && data.name) {
+        document.title = 'Leads — ' + data.name + ' (Admin)';
+        document.getElementById('page-title').textContent = data.name + ' — Leads';
+      }
+    })
+    .catch(function () {});
+</script>
+</body>
+</html>
